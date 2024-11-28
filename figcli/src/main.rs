@@ -392,8 +392,7 @@ fn main() {
             // and /src folder
             fs::create_dir_all(&src_path).unwrap();
 
-            let main_source = "export fn main() {\
-                }";
+            let main_source = "export fn main() {\n    print_str(\"HelloWorld\");\n}";
 
             let mut main_file = File::create_new(format!("{}/main.fig", src_path)).unwrap();
             main_file.write_all(main_source.as_bytes()).unwrap();
