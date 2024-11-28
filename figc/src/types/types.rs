@@ -25,7 +25,6 @@ pub enum Type {
 
 impl From<String> for Type {
     fn from(value: String) -> Self {
-        println!("bruh");
         let splited = value.split("[");
 
         if splited.clone().into_iter().count() >= 2 {
@@ -53,6 +52,16 @@ impl From<String> for Type {
             other => Self::Custom(other.to_string()),
         }
     }
+}
+
+pub fn types_to_val_types(types: Vec<Type>) -> Result<Vec<ValType>, CompilerError> {
+    let mut result = vec![];
+
+    for ty in types {
+        result.push(ty.try_into()?);
+    }
+
+    Ok(result)
 }
 
 impl TryInto<ValType> for Type {

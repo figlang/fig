@@ -1,17 +1,17 @@
 // MIT License
-// 
+//
 // Copyright (c) 2024 The Fig Programming Language
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
 // in the Software without restriction, including without limitation the rights
 // to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 // copies of the Software, and to permit persons to whom the Software is
 // furnished to do so, subject to the following conditions:
-// 
+//
 // The above copyright notice and this permission notice shall be included in all
 // copies or substantial portions of the Software.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -56,8 +56,6 @@ impl<'a> Parse<'a> for Type {
         res.push_str(type_ident.as_str());
 
         let type_value = Type::from(res);
-
-        println!("Type parsed, value: {:?}", type_value);
 
         Ok(type_value)
     }
@@ -1360,7 +1358,7 @@ mod tests {
     fn test_if_statement_with_else() {
         // very usefull code
         let source = r#"let x: i32 = if (y == 1) {
-            return y + 1; 
+            return y + 1;
         } else {
             return 1;
         }"#;
@@ -1411,7 +1409,7 @@ mod tests {
     fn test_if_statement_without_else() {
         // very usefull code
         let source = r#"let x: i32 = if (y == 1) {
-            return y + 1; 
+            return y + 1;
         }"#;
 
         let mut lexer = Lexer::new(source.to_string());

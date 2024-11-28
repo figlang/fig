@@ -40,7 +40,7 @@ use crate::{
         LetStatement, LoopStatement, ObjectAccess, ObjectExpr, PrefixExpr, Program, RefValue,
         ReturnStatement, SetStatement, Statement, StringExpr, StructStatement,
     },
-    types::types::Type,
+    types::types::{types_to_val_types, Type},
 };
 
 use super::builtins::malloc;
@@ -210,19 +210,19 @@ impl<'a> Instructions<'a> for DeRef {
         match ctx.type_ctx.active_type.clone() {
             Type::Array(arr_type) => match *arr_type.clone() {
                 Type::Char | Type::I8 => {
-                    result.push(Instruction::I32Load8S(MemArg {
-                        offset: 0,
-                        align: 0,
-                        memory_index: 0,
-                    }));
+                    // result.push(Instruction::I32Load8S(MemArg {
+                    //     offset: 0,
+                    //     align: 0,
+                    //     memory_index: 0,
+                    // }));
                 }
 
                 _ => {
-                    result.push(Instruction::I32Load(MemArg {
-                        offset: 0,
-                        align: 0,
-                        memory_index: 0,
-                    }));
+                    // result.push(Instruction::I32Load(MemArg {
+                    //     offset: 0,
+                    //     align: 0,
+                    //     memory_index: 0,
+                    // }));
                 }
             },
 
@@ -1328,6 +1328,40 @@ impl Context {
         Ok(())
     }
 
+    pub fn import_module(
+        &mut self,
+        module: &str,
+        function_name: &str,
+        function_arg_types: Vec<Type>,
+        function_return_types: Vec<Type>,
+    ) -> CResult<()> {
+        let function_arg_types = types_to_val_types(function_arg_types)?;
+        // Create type for function
+        let type_id = self.type_ctx.new_function_type(
+            function_arg_types.clone(),
+            types_to_val_types(function_return_types.clone())?,
+        );
+
+        self.import_ctx
+            .import_func(module, function_name, EntityType::Function(type_id));
+
+        self.function_ctx.new_external_function(
+            function_name.to_string(),
+            function_arg_types
+                .into_iter()
+                .enumerate()
+                .map(|(i, ty)| FunctionParam {
+                    id: i as u32,
+                    name: String::new(),
+                    param_type: ty,
+                })
+                .collect(),
+            function_return_types.get(0).map(|v| v.clone()),
+        );
+
+        Ok(())
+    }
+
     /// Bootstraps the default variables
     /// like memory offset
     pub fn bootstrap(&mut self) {
@@ -1751,12 +1785,7 @@ impl ImportContext {
         }
     }
 
-    pub fn import_func(
-        &mut self,
-        module: &String,
-        function_name: &String,
-        function_type: EntityType,
-    ) {
+    pub fn import_func(&mut self, module: &str, function_name: &str, function_type: EntityType) {
         self.section.import(module, function_name, function_type);
     }
 
