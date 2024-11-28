@@ -4,8 +4,10 @@ use figc::lexer::lexer::Lexer;
 use figc::parser::ast::Program;
 use figc::parser::parser::Parser as FigParser;
 use figc::preprocessor::preprocessor::Preprocessor;
+use figc::types::types::Type;
 use log::info;
-use std::fs::File;
+use serde::{Deserialize, Serialize};
+use std::fs::{self, read_to_string, File};
 use std::io::prelude::*;
 use std::io::{BufReader, Read, Write};
 use std::net::TcpListener;
@@ -33,12 +35,22 @@ enum Commands {
     Run(RunArgs),
 
     Server(ServerArgs),
+
+    New(NewProjectArgs),
+}
+
+#[derive(Args, Debug)]
+struct NewProjectArgs {
+    name: String,
+
+    #[arg(long, action, default_value = "fig")]
+    target: String,
 }
 
 #[derive(Args, Debug)]
 struct RunArgs {
     /// Fig file path
-    fig_file_path: PathBuf,
+    fig_file_path: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]
@@ -61,7 +73,11 @@ struct CompileArgs {
 }
 
 /// Expects SourceCode returns Wasm binary
-fn fig_compile_to_wasm(source: String, memory_offset: i32) -> (Vec<u8>, i32) {
+fn fig_compile_to_wasm(
+    source: String,
+    memory_offset: i32,
+    imports: Vec<(&str, &str, Vec<Type>, Vec<Type>)>,
+) -> (Vec<u8>, i32) {
     info!("Starting to compile ...");
     info!("Lexing source ...");
     let mut lexer = Lexer::new(source);
@@ -94,6 +110,16 @@ fn fig_compile_to_wasm(source: String, memory_offset: i32) -> (Vec<u8>, i32) {
     }
 
     let mut ctx = Context::new(program, memory_offset);
+    for (module_name, function_name, function_arg_types, function_return_types) in imports {
+        ctx.import_module(
+            module_name,
+            function_name,
+            function_arg_types,
+            function_return_types,
+        )
+        // TODO: remove unwrap()
+        .unwrap();
+    }
     ctx.bootstrap();
     ctx.visit().unwrap();
 
@@ -322,12 +348,70 @@ fn run_wasm_server<'a>(bytes: &Vec<u8>, addr: &'a str, mem_offset: i32) {
     }
 }
 
+/// Fig config file
+#[derive(Deserialize, Serialize)]
+struct Config {
+    package: PackageInfo,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum ProgramTarget {
+    Web,
+    Wasmer,
+    Fig,
+}
+
+impl From<String> for ProgramTarget {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "web" => Self::Web,
+            "wasmer" => Self::Wasmer,
+            "fig" => Self::Fig,
+            _ => Self::Fig,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+struct PackageInfo {
+    name: String,
+    target: ProgramTarget,
+}
+
+// TODO: impl Error handling
 fn main() {
     env_logger::init();
 
     let cli = Cli::parse();
 
     match &cli.command {
+        Commands::New(new_args) => {
+            let src_path = format!("{}/src", new_args.name.clone());
+            // Create a dir named new_args.name
+            // and /src folder
+            fs::create_dir_all(&src_path).unwrap();
+
+            let main_source = "export fn main() {\
+                }";
+
+            let mut main_file = File::create_new(format!("{}/main.fig", src_path)).unwrap();
+            main_file.write_all(main_source.as_bytes()).unwrap();
+
+            let config = Config {
+                package: PackageInfo {
+                    name: new_args.name.clone(),
+                    target: ProgramTarget::from(new_args.target.clone()),
+                },
+            };
+
+            let toml_text = toml::to_string(&config).unwrap();
+
+            let mut main_file = File::create_new(format!("{}/fig.toml", new_args.name)).unwrap();
+            main_file.write_all(toml_text.as_bytes()).unwrap();
+
+            println!("New project created!");
+        }
         Commands::Compile(c_args) => {
             // Open file
             let mut buffer = String::new();
@@ -338,7 +422,7 @@ fn main() {
             }
 
             // Now compile
-            let (final_wasm, _offset) = fig_compile_to_wasm(buffer, 0x0);
+            let (final_wasm, _offset) = fig_compile_to_wasm(buffer, 0x0, vec![]);
 
             if c_args.print_wat {
                 let wasm = print_bytes(&final_wasm)
@@ -357,16 +441,46 @@ fn main() {
             wasm_file.write_all(&*final_wasm).unwrap();
             wasm_file.flush().unwrap();
         }
-        Commands::Run(r_args) => {
+        Commands::Run(RunArgs {
+            fig_file_path: Some(path),
+            ..
+        }) => {
             let mut buffer = String::new();
             {
-                let mut file = File::open(&r_args.fig_file_path).unwrap();
+                let mut file = File::open(&path).unwrap();
                 file.read_to_string(&mut buffer).unwrap();
                 file.flush().unwrap();
             }
 
             // Now compile
-            let (final_wasm, _offset) = fig_compile_to_wasm(buffer, 0x0);
+            let (final_wasm, _offset) = fig_compile_to_wasm(buffer, 0x0, vec![]);
+
+            run_wasm(&final_wasm);
+        }
+        Commands::Run(RunArgs {
+            fig_file_path: None,
+            ..
+        }) => {
+            // Read fig.toml config file
+            let config_file_raw = read_to_string("./fig.toml").unwrap();
+            let config: Config = toml::from_str(&config_file_raw).unwrap();
+            let imports = if matches!(config.package.target, ProgramTarget::Fig) {
+                vec![
+                    (
+                        "io",
+                        "print_str",
+                        vec![Type::Array(Box::new(Type::Char))],
+                        vec![],
+                    ),
+                    ("io", "print_int", vec![Type::I32], vec![]),
+                ]
+            } else {
+                vec![]
+            };
+            let main_content = read_to_string("./src/main.fig").unwrap();
+
+            // Now compile
+            let (final_wasm, _offset) = fig_compile_to_wasm(main_content, 0x0, imports);
 
             run_wasm(&final_wasm);
         }
@@ -380,7 +494,7 @@ fn main() {
             }
 
             // Now compile
-            let (final_wasm, offset) = fig_compile_to_wasm(buffer, 0x0);
+            let (final_wasm, offset) = fig_compile_to_wasm(buffer, 0x0, vec![]);
 
             run_wasm_server(&final_wasm, &server_args.addr, offset);
         }
