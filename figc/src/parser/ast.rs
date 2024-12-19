@@ -888,7 +888,9 @@ impl<'a> Parse<'a> for StructFields {
 
             fields.push((ident, ty));
 
-            parser.expect_peek(Token::Comma)?;
+            if !parser.next_token_is(Token::RSquirly) {
+                parser.expect_peek(Token::Comma)?;
+            }
             parser.next_token();
         }
 
@@ -922,7 +924,9 @@ impl<'a> Parse<'a> for ObjectFields {
 
             fields.push((ident, expr));
 
-            parser.expect_peek(Token::Comma)?;
+            if !parser.next_token_is(Token::RSquirly) {
+                parser.expect_peek(Token::Comma)?;
+            }
             parser.next_token();
         }
 

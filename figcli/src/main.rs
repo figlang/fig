@@ -139,6 +139,17 @@ struct Env {
     alloc_func: Option<TypedFunction<i32, i32>>,
 }
 
+fn fig_inspect_mem(mut env: FunctionEnvMut<Env>, from: i32, to: i32) {
+    let (env_data, store) = env.data_and_store_mut();
+    let memory_view = env_data.memory.clone().unwrap().view(&store);
+    println!(
+        "Memory Inspect: {:?}",
+        memory_view
+            .copy_range_to_vec(from as u64..to as u64)
+            .unwrap_or_default()
+    );
+}
+
 fn fig_print(mut env: FunctionEnvMut<Env>, p: WasmPtr<u8>) {
     let (env_data, store) = env.data_and_store_mut();
     let memory_view = env_data.memory.clone().unwrap().view(&store);
@@ -212,6 +223,9 @@ fn run_wasm(bytes: &Vec<u8>) {
             "print_char" => Function::new_typed(&mut store, fig_print_char),
             "print_float" => Function::new_typed(&mut store,  fig_print_float),
             "read_file" => Function::new_typed_with_env(&mut store, &env, fig_read_file),
+        },
+        "mem" => {
+            "inspect_mem" => Function::new_typed_with_env(&mut store, &env, fig_inspect_mem)
         },
         "sys" => {
             "exit" => Function::new_typed(&mut store, fig_exit),
@@ -472,6 +486,8 @@ fn main() {
                         vec![],
                     ),
                     ("io", "print_int", vec![Type::I32], vec![]),
+                    ("io", "print_char", vec![Type::Char], vec![]),
+                    ("mem", "inspect_mem", vec![Type::I32, Type::I32], vec![]),
                 ]
             } else {
                 vec![]

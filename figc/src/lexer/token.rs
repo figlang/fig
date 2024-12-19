@@ -4,6 +4,7 @@ use std::fmt::Display;
 pub enum Token {
     Ident(String),
     Int(String),
+    Float(String),
 
     Illegal,
     Eof,
@@ -60,6 +61,7 @@ impl Display for Token {
         match self {
             Ident(str) => write!(f, "{}", str),
             Int(int) => write!(f, "{}", int),
+            Float(fl) => write!(f, "{}", fl),
 
             Illegal => write!(f, "Illegal"),
             Eof => write!(f, "End of file"),
@@ -83,7 +85,7 @@ impl Display for Token {
             Lparen => write!(f, "("),
             Rparen => write!(f, ")"),
             LSquirly => write!(f, "{}", '{'),
-            RSquirly => write!(f, "{}" ,'}'),
+            RSquirly => write!(f, "{}", '}'),
             LBrack => write!(f, "["),
             RBrack => write!(f, "]"),
 

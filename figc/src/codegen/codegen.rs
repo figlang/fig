@@ -196,6 +196,7 @@ impl<'a> Instructions<'a> for RefValue {
 
             Expression::Index(index) => Ok(index.get_offset(ctx)?),
 
+            //Expression::ObjectAccess(oa) => oa.
             _ => panic!(),
         }
     }
@@ -210,21 +211,29 @@ impl<'a> Instructions<'a> for DeRef {
         match ctx.type_ctx.active_type.clone() {
             Type::Array(arr_type) => match *arr_type.clone() {
                 Type::Char | Type::I8 => {
-                    // result.push(Instruction::I32Load8S(MemArg {
-                    //     offset: 0,
-                    //     align: 0,
-                    //     memory_index: 0,
-                    // }));
+                    result.push(Instruction::I32Load8S(MemArg {
+                        offset: 0,
+                        align: 0,
+                        memory_index: 0,
+                    }));
                 }
 
                 _ => {
-                    // result.push(Instruction::I32Load(MemArg {
-                    //     offset: 0,
-                    //     align: 0,
-                    //     memory_index: 0,
-                    // }));
+                    result.push(Instruction::I32Load(MemArg {
+                        offset: 0,
+                        align: 0,
+                        memory_index: 0,
+                    }));
                 }
             },
+
+            Type::Char | Type::I8 => {
+                result.push(Instruction::I32Load8S(MemArg {
+                    offset: 0,
+                    align: 0,
+                    memory_index: 0,
+                }));
+            }
 
             _ => {
                 result.push(Instruction::I32Load(MemArg {
@@ -941,9 +950,7 @@ impl ObjectExpr {
             ConstExpr::i32_const(current_mem_offset + size as i32),
         );
 
-        ctx.memory_ctx.alloc(size);
-
-        current_mem_offset
+        return ctx.memory_ctx.alloc(size);
     }
 }
 
@@ -958,8 +965,6 @@ impl<'a> Instructions<'a> for ObjectExpr {
                 0,
             ));
         };
-
-        ctx.type_ctx.set_active_type(Type::Custom(structure.name));
 
         let ptr = self.allocate(ctx, structure.fields.clone().len() as i32);
 
@@ -978,16 +983,31 @@ impl<'a> Instructions<'a> for ObjectExpr {
 
             result.push(Instruction::I32Const(ptr + i));
             result.extend(value.generate_instructions(ctx)?);
-            result.push(Instruction::I32Store(MemArg {
-                offset: 0,
-                align: 0,
-                memory_index: 0,
-            }));
+
+            match structure.fields.get(&field_name.value).unwrap() {
+                (_, Type::I8 | Type::Char) => {
+                    result.push(Instruction::I32Store8(MemArg {
+                        offset: 0,
+                        align: 0,
+                        memory_index: 0,
+                    }));
+                }
+
+                _ => {
+                    result.push(Instruction::I32Store(MemArg {
+                        offset: 0,
+                        align: 0,
+                        memory_index: 0,
+                    }));
+                }
+            }
 
             i += 1;
         }
 
         result.push(Instruction::I32Const(ptr));
+
+        ctx.type_ctx.set_active_type(Type::Custom(structure.name));
 
         Ok(result.clone())
     }
@@ -1037,13 +1057,30 @@ impl<'a> Instructions<'a> for ObjectAccess {
 
                     // Now get the property ( by index )
                     result.push(Instruction::LocalGet(local.index));
-                    result.push(Instruction::I32Const(structure_field.0));
-                    result.push(Instruction::I32Add);
                     result.push(Instruction::I32Load(MemArg {
                         offset: 0,
                         align: 0,
                         memory_index: 0,
                     }));
+                    result.push(Instruction::I32Const(structure_field.0));
+                    result.push(Instruction::I32Add);
+                    match structure_field {
+                        (_, Type::I8 | Type::Char) => {
+                            result.push(Instruction::I32Load8S(MemArg {
+                                offset: 0,
+                                align: 0,
+                                memory_index: 0,
+                            }));
+                        }
+
+                        _ => {
+                            result.push(Instruction::I32Load(MemArg {
+                                offset: 0,
+                                align: 0,
+                                memory_index: 0,
+                            }));
+                        }
+                    }
 
                     next_field = field.inner_field.clone();
                 }
